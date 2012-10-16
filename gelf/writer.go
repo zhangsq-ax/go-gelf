@@ -22,6 +22,10 @@ type Writer struct {
 	hostname string
 }
 
+// Message represents the contents of the GELF message.  It is gzipped
+// before sending.
+//
+// TODO: support optional ('_'-prefixed) fields?
 type Message struct {
 	Version      string `json:"version"`
 	Host         string `json:"host"`
@@ -34,25 +38,15 @@ type Message struct {
 	Line         int    `json:"line"`
 }
 
-/*
-{
-  "version": "1.0",
-  "host": "www1",
-  "short_message": "Short message",
-  "full_message": "Backtrace here\n\nmore stuff",
-  "timestamp": 1291899928.412,
-  "level": 1,
-  "facility": "payment-backend",
-  "file": "/var/www/somefile.rb",
-  "line": 356,
-  "_user_id": 42,
-  "_something_else": "foo"
-}
-*/
-
-// Used to control GELF chunking
+// Used to control GELF chunking.  Should be less than (MTU - len(UDP
+// header) - len(GELF header)).
+//
+// TODO: generate dynamically using Path MTU Discovery?
 const ChunkSize = 1420
 
+// New returns a new GELF Writer.  This writer can be used to send the
+// output of the standard Go log functions to a central GELF server by
+// passing it to log.SetOutput()
 func New(addr string) (*Writer, error) {
 	var err error
 	w := new(Writer)
@@ -67,6 +61,10 @@ func New(addr string) (*Writer, error) {
 	return w, nil
 }
 
+// WriteMessage sends the specified message to the GELF server
+// specified in the call to New().  It assumes all the fields are
+// filled out appropriately.  In general, most clients will want to
+// use Write, rather than WriteMessage.
 func (w *Writer) WriteMessage(m *Message) error {
 	mBytes, err := json.Marshal(m)
 	if err != nil {
@@ -96,13 +94,19 @@ func (w *Writer) Notice(m string) (err error)
 func (w *Writer) Warning(m string) (err error)
 */
 
-// getCallerIgnoringLog returns the filename and the line info
-func getCallerIgnoringLog() (file string, line int) {
+// getCallerIgnoringLog returns the filename and the line info of a
+// function further down in the call stack.  Passing 0 in as callDepth
+// would return info on the function calling getCallerIgnoringLog, 1
+// the parent function, and so on.  The exception is that if the frame
+// that is pointed to is from the go log library, included with go, it
+// is ignored, and the function that called e.g. log.Println() is
+// returned.
+func getCallerIgnoringLog(callDepth int) (file string, line int) {
 	var ok bool
-	calldepth := 2 // 0 would be this function, 1 would be Writer.Write
+	callDepth++ // 0 would be this function, 1 would be Writer.Write
 
 	for {
-		_, file, line, ok = runtime.Caller(calldepth)
+		_, file, line, ok = runtime.Caller(callDepth)
 		if !ok {
 			file = "???"
 			line = 0
@@ -111,14 +115,17 @@ func getCallerIgnoringLog() (file string, line int) {
 		if !strings.HasSuffix(file, "/pkg/log/log.go") {
 			break
 		}
-		calldepth++
+		callDepth++
 	}
 	return
 }
 
+// Write encodes the given string in a GELF message and sends it to
+// the server specified in New().
 func (w *Writer) Write(p []byte) (n int, err error) {
 
-	file, line := getCallerIgnoringLog()
+	// 1 for the function that called us.
+	file, line := getCallerIgnoringLog(1)
 
 	fmt.Printf("f: %s, line %d\n", file, line)
 
