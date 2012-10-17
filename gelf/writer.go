@@ -6,6 +6,7 @@ package gelf
 
 import (
 	"bytes"
+	"compress/zlib"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -17,10 +18,11 @@ import (
 )
 
 type Writer struct {
-	mu       sync.Mutex
-	conn     net.Conn
-	facility string
-	hostname string
+	mu               sync.Mutex
+	conn             net.Conn
+	facility         string
+	hostname         string
+	CompressionLevel int // one of the consts from compress/flate
 }
 
 // Message represents the contents of the GELF message.  It is gzipped
@@ -51,6 +53,7 @@ const ChunkSize = 1420
 func New(addr string) (*Writer, error) {
 	var err error
 	w := new(Writer)
+	w.CompressionLevel = zlib.BestSpeed
 
 	if w.conn, err = net.Dial("udp", addr); err != nil {
 		return nil, err
@@ -66,15 +69,25 @@ func New(addr string) (*Writer, error) {
 // specified in the call to New().  It assumes all the fields are
 // filled out appropriately.  In general, most clients will want to
 // use Write, rather than WriteMessage.
-func (w *Writer) WriteMessage(m *Message) error {
+func (w *Writer) WriteMessage(m *Message) (err error) {
 	mBytes, err := json.Marshal(m)
 	if err != nil {
-		return err
+		return
 	}
 
-	n, err := w.conn.Write(mBytes)
+	var zBuf bytes.Buffer
+	zw, err := zlib.NewWriterLevel(&zBuf, w.CompressionLevel)
 	if err != nil {
-		return err
+		return
+	}
+	if _, err = zw.Write(mBytes); err != nil {
+		return
+	}
+	zw.Close()
+
+	n, err := w.conn.Write(zBuf.Bytes())
+	if err != nil {
+		return
 	}
 	if n != len(mBytes) {
 		return fmt.Errorf("bad write (%d/%d)", n, len(mBytes))
