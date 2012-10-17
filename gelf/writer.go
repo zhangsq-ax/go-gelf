@@ -67,8 +67,8 @@ func New(addr string) (*Writer, error) {
 
 // WriteMessage sends the specified message to the GELF server
 // specified in the call to New().  It assumes all the fields are
-// filled out appropriately.  In general, most clients will want to
-// use Write, rather than WriteMessage.
+// filled out appropriately.  In general, clients will want to use
+// Write, rather than WriteMessage.
 func (w *Writer) WriteMessage(m *Message) (err error) {
 	mBytes, err := json.Marshal(m)
 	if err != nil {
