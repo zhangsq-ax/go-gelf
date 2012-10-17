@@ -5,6 +5,7 @@
 package gelf
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -29,8 +30,8 @@ type Writer struct {
 type Message struct {
 	Version      string `json:"version"`
 	Host         string `json:"host"`
-	ShortMessage string `json:"short_message"`
-	FullMessage  string `json:"full_message"`
+	ShortMessage []byte `json:"short_message"`
+	FullMessage  []byte `json:"full_message"`
 	TimeUnix     int64  `json:"timestamp"`
 	Level        int32  `json:"level"`
 	Facility     string `json:"facility"`
@@ -128,11 +129,18 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 	// 1 for the function that called us.
 	file, line := getCallerIgnoringLog(1)
 
+	// if there are newlines in the message, use the first line
+	// for the short message.  otherwise use it all
+	short := p
+	if i := bytes.IndexRune(p, '\n'); i > 0 {
+		short = p[:i]
+	}
+
 	m := Message{
 		Version:      "1.0",
 		Host:         w.hostname,
-		ShortMessage: "",
-		FullMessage:  "",
+		ShortMessage: short,
+		FullMessage:  p,
 		TimeUnix:     time.Now().Unix(),
 		Level:        1,
 		Facility:     w.facility,
