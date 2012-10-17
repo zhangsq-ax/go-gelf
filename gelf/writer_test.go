@@ -6,8 +6,17 @@ package gelf
 
 import (
 	"log"
+	"strings"
 	"testing"
 )
+
+func TestNew(t *testing.T) {
+	w, err := New("")
+	if err == nil || w != nil {
+		t.Errorf("New didn't fail")
+		return
+	}
+}
 
 func TestWrite(t *testing.T) {
 	w, err := New("localhost:1234")
@@ -23,5 +32,14 @@ func TestWrite(t *testing.T) {
 }
 
 func TestGetCaller(t *testing.T) {
+	file, line := getCallerIgnoringLog(1000)
+	if line != 0 || file != "???" {
+		t.Errorf("didn't fail 1 %s %d", file, line)
+		return
+	}
 
+	file, _ = getCallerIgnoringLog(0)
+	if !strings.HasSuffix(file, "/gelf/writer_test.go") {
+		t.Errorf("not writer_test.go? %s", file)
+	}
 }

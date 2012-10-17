@@ -102,10 +102,11 @@ func (w *Writer) Warning(m string) (err error)
 // is ignored, and the function that called e.g. log.Println() is
 // returned.
 func getCallerIgnoringLog(callDepth int) (file string, line int) {
-	var ok bool
-	callDepth++ // 0 would be this function, 1 would be Writer.Write
+	// bump by 1 to ignore the getCallerIgnoringLog (this) stackframe
+	callDepth++
 
 	for {
+		var ok bool
 		_, file, line, ok = runtime.Caller(callDepth)
 		if !ok {
 			file = "???"
@@ -126,8 +127,6 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 
 	// 1 for the function that called us.
 	file, line := getCallerIgnoringLog(1)
-
-	fmt.Printf("f: %s, line %d\n", file, line)
 
 	m := Message{
 		Version:      "1.0",
