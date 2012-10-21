@@ -42,7 +42,7 @@ type Message struct {
 }
 
 // Used to control GELF chunking.  Should be less than (MTU - len(UDP
-// header) - len(GELF header)).
+// header)).
 //
 // TODO: generate dynamically using Path MTU Discovery?
 const ChunkSize = 1420
@@ -65,6 +65,16 @@ func New(addr string) (*Writer, error) {
 	return w, nil
 }
 
+// numChunks returns the number of GELF chunks necessary to transmit
+// the given zlib compressed buffer.
+func numChunks(b []byte) int {
+	return len(b)/ChunkSize + 1
+}
+
+func (w *Writer) writeChunked(zBytes []byte) (err error) {
+	return fmt.Errorf("not implemented")
+}
+
 // WriteMessage sends the specified message to the GELF server
 // specified in the call to New().  It assumes all the fields are
 // filled out appropriately.  In general, clients will want to use
@@ -85,7 +95,12 @@ func (w *Writer) WriteMessage(m *Message) (err error) {
 	}
 	zw.Close()
 
-	n, err := w.conn.Write(zBuf.Bytes())
+	zBytes := zBuf.Bytes()
+	if numChunks(zBytes) > 1 {
+		return w.writeChunked(zBytes)
+	}
+
+	n, err := w.conn.Write(zBytes)
 	if err != nil {
 		return
 	}
