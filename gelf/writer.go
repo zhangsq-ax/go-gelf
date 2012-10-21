@@ -7,8 +7,10 @@ package gelf
 import (
 	"bytes"
 	"compress/zlib"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"runtime"
@@ -45,7 +47,21 @@ type Message struct {
 // header)).
 //
 // TODO: generate dynamically using Path MTU Discovery?
-const ChunkSize = 1420
+const (
+	ChunkSize = 1420
+	chunkedHeaderLen = 12
+	chunkedDataLen = ChunkSize - chunkedHeaderLen
+)
+
+// numChunks returns the number of GELF chunks necessary to transmit
+// the given zlib compressed buffer.
+func numChunks(b []byte) int {
+	lenB := len(b)
+	if lenB <= ChunkSize {
+		return 1
+	}
+	return len(b)/chunkedDataLen + 1
+}
 
 // New returns a new GELF Writer.  This writer can be used to send the
 // output of the standard Go log functions to a central GELF server by
@@ -65,14 +81,64 @@ func New(addr string) (*Writer, error) {
 	return w, nil
 }
 
-// numChunks returns the number of GELF chunks necessary to transmit
-// the given zlib compressed buffer.
-func numChunks(b []byte) int {
-	return len(b)/ChunkSize + 1
-}
-
+// writes the zlib compressed byte array to the connection as a series
+// of GELF chunked messages.  The header format is documented at
+// https://github.com/Graylog2/graylog2-docs/wiki/GELF as:
+//
+//     2-byte magic (0x1e 0x0f), 8 byte id, 1 byte sequence id, 1 byte
+//     total, chunk-data
 func (w *Writer) writeChunked(zBytes []byte) (err error) {
-	return fmt.Errorf("not implemented")
+	b := make([]byte, 0, ChunkSize)
+	buf := bytes.NewBuffer(b)
+	nChunksI := numChunks(zBytes)
+	if nChunksI > 255 {
+		return fmt.Errorf("msg too large, would need %d chunks", nChunksI)
+	}
+	nChunks := uint8(nChunksI)
+	// use urandom to get a unique message id
+	msgId := make([]byte, 8)
+	n, err := io.ReadFull(rand.Reader, msgId)
+	if err != nil || n != 8 {
+		return fmt.Errorf("rand.Reader: %d/%s", n, err)
+	}
+
+	bytesLeft := len(zBytes)
+	for i := uint8(0); i < nChunks; i++ {
+		buf.Reset()
+		// manually write header.  Don't care about
+		// host/network byte order, because the spec only
+		// deals in individual bytes.
+		buf.Write([]byte{0x1e, 0x0f}) //magic
+		buf.Write(msgId)
+		buf.WriteByte(i)
+		buf.WriteByte(nChunks)
+		// slice out our chunk from zBytes
+		chunkLen := chunkedDataLen
+		if chunkLen > bytesLeft {
+			chunkLen = bytesLeft
+		}
+		off := int(i)*chunkedDataLen
+		chunk := zBytes[off:off+chunkLen]
+		buf.Write(chunk)
+
+		// write this chunk, and make sure the write was good
+		n, err := w.conn.Write(buf.Bytes())
+		if err != nil {
+			return fmt.Errorf("Write (chunk %d/%d): %s", i,
+				nChunks, err)
+		}
+		if n != len(buf.Bytes()) {
+			return fmt.Errorf("Write len: (chunk %d/%d) (%d/%d)",
+				i, nChunks, n, len(buf.Bytes()))
+		}
+
+		bytesLeft -= chunkLen
+	}
+	// debugging
+	if bytesLeft != 0 {
+		panic("aw shit")
+	}
+	return nil
 }
 
 // WriteMessage sends the specified message to the GELF server
@@ -104,8 +170,8 @@ func (w *Writer) WriteMessage(m *Message) (err error) {
 	if err != nil {
 		return
 	}
-	if n != len(mBytes) {
-		return fmt.Errorf("bad write (%d/%d)", n, len(mBytes))
+	if n != len(zBytes) {
+		return fmt.Errorf("bad write (%d/%d)", n, len(zBytes))
 	}
 
 	return nil
