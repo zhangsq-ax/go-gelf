@@ -6,7 +6,7 @@ package gelf
 
 import (
 	"bytes"
-	"compress/zlib"
+	"compress/gzip"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -56,10 +56,11 @@ const (
 var (
 	magicChunked = []byte{0x1e, 0x0f}
 	magicZlib = []byte{0x78, 0x9c}
+	magicGzip = []byte{0x1f, 0x8b}
 )
 
 // numChunks returns the number of GELF chunks necessary to transmit
-// the given zlib compressed buffer.
+// the given compressed buffer.
 func numChunks(b []byte) int {
 	lenB := len(b)
 	if lenB <= ChunkSize {
@@ -74,7 +75,7 @@ func numChunks(b []byte) int {
 func NewWriter(addr string) (*Writer, error) {
 	var err error
 	w := new(Writer)
-	w.CompressionLevel = zlib.BestSpeed
+	w.CompressionLevel = gzip.BestSpeed
 
 	if w.conn, err = net.Dial("udp", addr); err != nil {
 		return nil, err
@@ -86,7 +87,7 @@ func NewWriter(addr string) (*Writer, error) {
 	return w, nil
 }
 
-// writes the zlib compressed byte array to the connection as a series
+// writes the gzip compressed byte array to the connection as a series
 // of GELF chunked messages.  The header format is documented at
 // https://github.com/Graylog2/graylog2-docs/wiki/GELF as:
 //
@@ -157,8 +158,8 @@ func (w *Writer) WriteMessage(m *Message) (err error) {
 	}
 
 	var zBuf bytes.Buffer
-	zBuf.Write(magicZlib) // magic, from the GELF wiki
-	zw, err := zlib.NewWriterLevel(&zBuf, w.CompressionLevel)
+	//zBuf.Write(magicGzip) // magic, from the GELF wiki
+	zw, err := gzip.NewWriterLevel(&zBuf, w.CompressionLevel)
 	if err != nil {
 		return
 	}
@@ -169,7 +170,7 @@ func (w *Writer) WriteMessage(m *Message) (err error) {
 
 	zBytes := zBuf.Bytes()
 	if numChunks(zBytes) > 1 {
-		// if we have to chunk, remove the magic zlib header
+		// if we have to chunk, remove the magic header
 		return w.writeChunked(zBytes[2:])
 	}
 
@@ -215,7 +216,8 @@ func getCallerIgnoringLog(callDepth int) (file string, line int) {
 			line = 0
 			break
 		}
-		if !strings.HasSuffix(file, "/pkg/log/log.go") {
+		if !strings.HasSuffix(file, "/pkg/log/log.go") &&
+			!strings.HasSuffix(file, "/pkg/io/multi.go") {
 			break
 		}
 		callDepth++

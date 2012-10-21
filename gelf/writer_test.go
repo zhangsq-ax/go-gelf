@@ -6,7 +6,7 @@ package gelf
 
 import (
 	"bytes"
-	"compress/zlib"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -41,21 +41,21 @@ func sendAndRecv(msgData []byte) (*Message, error) {
 
 	w.Write(msgData)
 
-	// the data we get from the wire is zlib compressed
+	// the data we get from the wire is compressed
 	zBuf := make([]byte, ChunkSize)
 
 	n, err := conn.Read(zBuf)
 	if err != nil {
 		return nil, fmt.Errorf("Read: %s", err)
 	}
-	zHead, zBuf := zBuf[:2], zBuf[2:n]
-	if !bytes.Equal(zHead, magicZlib) {
-		return nil, fmt.Errorf("unknown magic: %x", magicZlib)
+	zHead, zBuf := zBuf[:2], zBuf[:n]
+	if !bytes.Equal(zHead, magicGzip) {
+		return nil, fmt.Errorf("unknown magic: %x", magicGzip)
 	}
 
-	zReader, err := zlib.NewReader(bytes.NewReader(zBuf))
+	zReader, err := gzip.NewReader(bytes.NewReader(zBuf))
 	if err != nil {
-		return nil, fmt.Errorf("zlib.NewReader: %s", err)
+		return nil, fmt.Errorf("NewReader: %s", err)
 	}
 
 	var buf bytes.Buffer
