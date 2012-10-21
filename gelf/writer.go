@@ -30,15 +30,15 @@ type Writer struct {
 //
 // TODO: support optional ('_'-prefixed) fields?
 type Message struct {
-	Version      string `json:"version"`
-	Host         string `json:"host"`
-	ShortMessage []byte `json:"short_message"`
-	FullMessage  []byte `json:"full_message"`
-	TimeUnix     int64  `json:"timestamp"`
-	Level        int32  `json:"level"`
-	Facility     string `json:"facility"`
-	File         string `json:"file"`
-	Line         int    `json:"line"`
+	Version  string `json:"version"`
+	Host     string `json:"host"`
+	Short    []byte `json:"short_message"`
+	Full     []byte `json:"full_message"`
+	TimeUnix int64  `json:"timestamp"`
+	Level    int32  `json:"level"`
+	Facility string `json:"facility"`
+	File     string `json:"file"`
+	Line     int    `json:"line"`
 }
 
 // Used to control GELF chunking.  Should be less than (MTU - len(UDP
@@ -142,23 +142,30 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 	// 1 for the function that called us.
 	file, line := getCallerIgnoringLog(1)
 
-	// if there are newlines in the message, use the first line
-	// for the short message.  otherwise use it all
+	// remove trailing and leading whitespace
+	p = bytes.TrimSpace(p)
+
+	// If there are newlines in the message, use the first line
+	// for the short message and set the full message to the
+	// original input.  If the input has no newlines, stick the
+	// whole thing in Short.
 	short := p
+	full := []byte("")
 	if i := bytes.IndexRune(p, '\n'); i > 0 {
 		short = p[:i]
+		full = p
 	}
 
 	m := Message{
-		Version:      "1.0",
-		Host:         w.hostname,
-		ShortMessage: short,
-		FullMessage:  p,
-		TimeUnix:     time.Now().Unix(),
-		Level:        1,
-		Facility:     w.facility,
-		File:         file,
-		Line:         line,
+		Version:  "1.0",
+		Host:     w.hostname,
+		Short:    short,
+		Full:     full,
+		TimeUnix: time.Now().Unix(),
+		Level:    1,
+		Facility: w.facility,
+		File:     file,
+		Line:     line,
 	}
 
 	if err = w.WriteMessage(&m); err != nil {
