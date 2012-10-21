@@ -13,6 +13,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path"
 	"runtime"
 	"strings"
 	"sync"
@@ -22,7 +23,7 @@ import (
 type Writer struct {
 	mu               sync.Mutex
 	conn             net.Conn
-	facility         string
+	Facility         string
 	hostname         string
 	CompressionLevel int // one of the consts from compress/flate
 }
@@ -83,6 +84,8 @@ func NewWriter(addr string) (*Writer, error) {
 	if w.hostname, err = os.Hostname(); err != nil {
 		return nil, err
 	}
+
+	w.Facility = path.Base(os.Args[0])
 
 	return w, nil
 }
@@ -252,7 +255,7 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 		Full:     string(full),
 		TimeUnix: time.Now().Unix(),
 		Level:    6, // info
-		Facility: w.facility,
+		Facility: w.Facility,
 		File:     file,
 		Line:     line,
 	}
