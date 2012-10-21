@@ -23,7 +23,7 @@ func TestNewWriter(t *testing.T) {
 	}
 }
 
-func sendAndRecv(msgData []byte) (*Message, error) {
+func sendAndRecv(msgData string) (*Message, error) {
 	addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
 	if err != nil {
 		return nil, fmt.Errorf("ResolveUDPAddr: %s", err)
@@ -39,7 +39,9 @@ func sendAndRecv(msgData []byte) (*Message, error) {
 		return nil, fmt.Errorf("New: %s", err)
 	}
 
-	w.Write(msgData)
+	if _, err = w.Write([]byte(msgData)); err != nil {
+		return nil, fmt.Errorf("w.Write: %s", err)
+	}
 
 	// the data we get from the wire is compressed
 	zBuf := make([]byte, ChunkSize)
@@ -75,7 +77,7 @@ func sendAndRecv(msgData []byte) (*Message, error) {
 // tests single-message (non-chunked) messages that are split over
 // multiple lines
 func TestWriteSmallMultiLine(t *testing.T) {
-	msgData := []byte("awesomesauce\nbananas")
+	msgData := "awesomesauce\nbananas"
 
 	msg, err := sendAndRecv(msgData)
 	if err != nil {
@@ -83,15 +85,13 @@ func TestWriteSmallMultiLine(t *testing.T) {
 		return
 	}
 
-	if !bytes.Equal(msg.Short, []byte("awesomesauce")) {
-		t.Errorf("msg.Short: expected %s, got %s", string(msgData),
-			string(msg.Full))
+	if msg.Short != "awesomesauce" {
+		t.Errorf("msg.Short: expected %s, got %s", msgData, msg.Full)
 		return
 	}
 
-	if !bytes.Equal(msg.Full, msgData) {
-		t.Errorf("msg.Full: expected %s, got %s", string(msgData),
-			string(msg.Full))
+	if msg.Full != msgData {
+		t.Errorf("msg.Full: expected %s, got %s", msgData, msg.Full)
 		return
 	}
 
@@ -104,7 +104,8 @@ func TestWriteSmallMultiLine(t *testing.T) {
 
 // tests single-message (non-chunked) messages that are a single line long
 func TestWriteSmallOneLine(t *testing.T) {
-	msgData := []byte("some awesome thing\n")
+	msgData := "some awesome thing\n"
+	msgDataTrunc := msgData[:len(msgData)-1]
 
 	msg, err := sendAndRecv(msgData)
 	if err != nil {
@@ -113,15 +114,14 @@ func TestWriteSmallOneLine(t *testing.T) {
 	}
 
 	// we should remove the trailing newline
-	if !bytes.Equal(msg.Short, msgData[:len(msgData)-1]) {
-		t.Errorf("msg.Short: expected %s, got %s", string(msgData),
-			string(msg.Full))
+	if msg.Short != msgDataTrunc {
+		t.Errorf("msg.Short: expected %s, got %s",
+			msgDataTrunc, msg.Short)
 		return
 	}
 
-	if !bytes.Equal(msg.Full, []byte("")) {
-		t.Errorf("msg.Full: expected %s, got %s", string(msgData),
-			string(msg.Full))
+	if msg.Full != "" {
+		t.Errorf("msg.Full: expected %s, got %s", msgData, msg.Full)
 		return
 	}
 

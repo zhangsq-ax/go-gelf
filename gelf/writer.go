@@ -34,8 +34,8 @@ type Writer struct {
 type Message struct {
 	Version  string `json:"version"`
 	Host     string `json:"host"`
-	Short    []byte `json:"short_message"`
-	Full     []byte `json:"full_message"`
+	Short    string `json:"short_message"`
+	Full     string `json:"full_message"`
 	TimeUnix int64  `json:"timestamp"`
 	Level    int32  `json:"level"`
 	Facility string `json:"facility"`
@@ -158,7 +158,6 @@ func (w *Writer) WriteMessage(m *Message) (err error) {
 	}
 
 	var zBuf bytes.Buffer
-	//zBuf.Write(magicGzip) // magic, from the GELF wiki
 	zw, err := gzip.NewWriterLevel(&zBuf, w.CompressionLevel)
 	if err != nil {
 		return
@@ -249,10 +248,10 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 	m := Message{
 		Version:  "1.0",
 		Host:     w.hostname,
-		Short:    short,
-		Full:     full,
+		Short:    string(short),
+		Full:     string(full),
 		TimeUnix: time.Now().Unix(),
-		Level:    1,
+		Level:    6, // info
 		Facility: w.facility,
 		File:     file,
 		Line:     line,
