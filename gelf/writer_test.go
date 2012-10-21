@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"compress/zlib"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"strings"
@@ -22,26 +23,22 @@ func TestNew(t *testing.T) {
 	}
 }
 
-// tests single-message (non-chunked) messages
-func TestWriteSmall(t *testing.T) {
+func sendAndRecv(msgData []byte) (*Message, error) {
 	addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
 	if err != nil {
-		t.Errorf("ResolveUDPAddr: %s", err)
-		return
+		return nil, fmt.Errorf("ResolveUDPAddr: %s", err)
 	}
+
 	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
-		t.Errorf("ListenUDP: %s", err)
-		return
+		return nil, fmt.Errorf("ListenUDP: %s", err)
 	}
 
 	w, err := New(conn.LocalAddr().String())
 	if err != nil {
-		t.Errorf("New: %s", err)
-		return
+		return nil, fmt.Errorf("New: %s", err)
 	}
 
-	msgData := []byte("awesomesauce\nbananas")
 	w.Write(msgData)
 
 	// the data we get from the wire is zlib compressed
@@ -49,27 +46,36 @@ func TestWriteSmall(t *testing.T) {
 
 	n, err := conn.Read(zBuf)
 	if err != nil {
-		t.Errorf("Read: %s", err)
-		return
+		return nil, fmt.Errorf("Read: %s", err)
 	}
 	zBuf = zBuf[:n]
 
 	zReader, err := zlib.NewReader(bytes.NewReader(zBuf))
 	if err != nil {
-		t.Errorf("zlib.NewReader: %s", err)
-		return
+		return nil, fmt.Errorf("zlib.NewReader: %s", err)
 	}
 
 	var buf bytes.Buffer
 	_, err = io.Copy(&buf, zReader)
 	if err != nil {
-		t.Errorf("io.Copy: %s", err)
-		return
+		return nil, fmt.Errorf("io.Copy: %s", err)
 	}
 
-	var msg Message
+	msg := new(Message)
 	if err := json.Unmarshal(buf.Bytes(), &msg); err != nil {
-		t.Errorf("json.Unmarshal: %s", err)
+		return nil, fmt.Errorf("json.Unmarshal: %s", err)
+	}
+
+	return msg, nil
+}
+
+// tests single-message (non-chunked) messages
+func TestWriteSmall(t *testing.T) {
+	msgData := []byte("awesomesauce\nbananas")
+
+	msg, err := sendAndRecv(msgData)
+	if err != nil {
+		t.Errorf("sendAndRecv: %s", err)
 		return
 	}
 
