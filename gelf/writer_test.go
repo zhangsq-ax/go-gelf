@@ -15,8 +15,8 @@ import (
 	"testing"
 )
 
-func TestNew(t *testing.T) {
-	w, err := New("")
+func TestNewWriter(t *testing.T) {
+	w, err := NewWriter("")
 	if err == nil || w != nil {
 		t.Errorf("New didn't fail")
 		return
@@ -34,7 +34,7 @@ func sendAndRecv(msgData []byte) (*Message, error) {
 		return nil, fmt.Errorf("ListenUDP: %s", err)
 	}
 
-	w, err := New(conn.LocalAddr().String())
+	w, err := NewWriter(conn.LocalAddr().String())
 	if err != nil {
 		return nil, fmt.Errorf("New: %s", err)
 	}
