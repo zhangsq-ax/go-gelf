@@ -48,7 +48,10 @@ func sendAndRecv(msgData []byte) (*Message, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Read: %s", err)
 	}
-	zBuf = zBuf[:n]
+	zHead, zBuf := zBuf[:2], zBuf[2:n]
+	if !bytes.Equal(zHead, magicZlib) {
+		return nil, fmt.Errorf("unknown magic: %x", magicZlib)
+	}
 
 	zReader, err := zlib.NewReader(bytes.NewReader(zBuf))
 	if err != nil {

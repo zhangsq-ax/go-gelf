@@ -53,6 +53,11 @@ const (
 	chunkedDataLen = ChunkSize - chunkedHeaderLen
 )
 
+var (
+	magicChunked = []byte{0x1e, 0x0f}
+	magicZlib = []byte{0x78, 0x9c}
+)
+
 // numChunks returns the number of GELF chunks necessary to transmit
 // the given zlib compressed buffer.
 func numChunks(b []byte) int {
@@ -108,7 +113,7 @@ func (w *Writer) writeChunked(zBytes []byte) (err error) {
 		// manually write header.  Don't care about
 		// host/network byte order, because the spec only
 		// deals in individual bytes.
-		buf.Write([]byte{0x1e, 0x0f}) //magic
+		buf.Write(magicChunked) //magic
 		buf.Write(msgId)
 		buf.WriteByte(i)
 		buf.WriteByte(nChunks)
@@ -152,6 +157,7 @@ func (w *Writer) WriteMessage(m *Message) (err error) {
 	}
 
 	var zBuf bytes.Buffer
+	zBuf.Write(magicZlib) // magic, from the GELF wiki
 	zw, err := zlib.NewWriterLevel(&zBuf, w.CompressionLevel)
 	if err != nil {
 		return
@@ -163,7 +169,8 @@ func (w *Writer) WriteMessage(m *Message) (err error) {
 
 	zBytes := zBuf.Bytes()
 	if numChunks(zBytes) > 1 {
-		return w.writeChunked(zBytes)
+		// if we have to chunk, remove the magic zlib header
+		return w.writeChunked(zBytes[2:])
 	}
 
 	n, err := w.conn.Write(zBytes)
