@@ -69,8 +69,9 @@ func sendAndRecv(msgData []byte) (*Message, error) {
 	return msg, nil
 }
 
-// tests single-message (non-chunked) messages
-func TestWriteSmall(t *testing.T) {
+// tests single-message (non-chunked) messages that are split over
+// multiple lines
+func TestWriteSmallMultiLine(t *testing.T) {
 	msgData := []byte("awesomesauce\nbananas")
 
 	msg, err := sendAndRecv(msgData)
@@ -86,6 +87,36 @@ func TestWriteSmall(t *testing.T) {
 	}
 
 	if !bytes.Equal(msg.Full, msgData) {
+		t.Errorf("msg.Full: expected %s, got %s", string(msgData),
+			string(msg.Full))
+		return
+	}
+
+	fileExpected := "/go-gelf/gelf/writer_test.go"
+	if !strings.HasSuffix(msg.File, fileExpected) {
+		t.Errorf("msg.File: expected %s, got %s", fileExpected,
+			msg.File)
+	}
+}
+
+// tests single-message (non-chunked) messages that are a single line long
+func TestWriteSmallOneLine(t *testing.T) {
+	msgData := []byte("some awesome thing\n")
+
+	msg, err := sendAndRecv(msgData)
+	if err != nil {
+		t.Errorf("sendAndRecv: %s", err)
+		return
+	}
+
+	// we should remove the trailing newline
+	if !bytes.Equal(msg.Short, msgData[:len(msgData)-1]) {
+		t.Errorf("msg.Short: expected %s, got %s", string(msgData),
+			string(msg.Full))
+		return
+	}
+
+	if !bytes.Equal(msg.Full, []byte("")) {
 		t.Errorf("msg.Full: expected %s, got %s", string(msgData),
 			string(msg.Full))
 		return
