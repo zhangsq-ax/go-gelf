@@ -71,7 +71,7 @@ const (
 
 var (
 	magicChunked = []byte{0x1e, 0x0f}
-	magicZlib = []byte{0x78, 0x9c}
+	magicZlib = []byte{0x78}
 	magicGzip = []byte{0x1f, 0x8b}
 )
 
@@ -101,6 +101,7 @@ func NewWriter(addr string) (*Writer, error) {
 	}
 
 	w.Facility = path.Base(os.Args[0])
+	w.CompressionType = CompressZlib
 
 	return w, nil
 }
