@@ -7,6 +7,8 @@ package gelf
 import (
 	"bytes"
 	"compress/gzip"
+	"compress/zlib"
+	"compress/flate"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -20,13 +22,26 @@ import (
 	"time"
 )
 
+// Writer implements io.Writer and is used to send both discrete
+// messages to a graylog2 server, or data from a stream-oriented
+// interface (like the functions in log).
 type Writer struct {
 	mu               sync.Mutex
 	conn             net.Conn
-	Facility         string
 	hostname         string
-	CompressionLevel int // one of the consts from compress/flate
+	Facility         string // defaults to current process name
+	CompressionLevel int    // one of the consts from compress/flate
+	CompressionType  CompressType
 }
+
+// What compression type the writer should use when sending messages
+// to the graylog2 server
+type CompressType int
+
+const (
+	CompressGzip CompressType = iota
+	CompressZlib
+)
 
 // Message represents the contents of the GELF message.  It is gzipped
 // before sending.
@@ -76,7 +91,7 @@ func numChunks(b []byte) int {
 func NewWriter(addr string) (*Writer, error) {
 	var err error
 	w := new(Writer)
-	w.CompressionLevel = gzip.BestSpeed
+	w.CompressionLevel = flate.BestSpeed
 
 	if w.conn, err = net.Dial("udp", addr); err != nil {
 		return nil, err
@@ -161,7 +176,16 @@ func (w *Writer) WriteMessage(m *Message) (err error) {
 	}
 
 	var zBuf bytes.Buffer
-	zw, err := gzip.NewWriterLevel(&zBuf, w.CompressionLevel)
+	var zw io.WriteCloser
+	switch w.CompressionType {
+	case CompressGzip:
+		zw, err = gzip.NewWriterLevel(&zBuf, w.CompressionLevel)
+	case CompressZlib:
+		zw, err = zlib.NewWriterLevel(&zBuf, w.CompressionLevel)
+	default:
+		panic(fmt.Sprintf("unknown compression type %d",
+			w.CompressionType))
+	}
 	if err != nil {
 		return
 	}
