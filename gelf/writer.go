@@ -196,8 +196,7 @@ func (w *Writer) WriteMessage(m *Message) (err error) {
 
 	zBytes := zBuf.Bytes()
 	if numChunks(zBytes) > 1 {
-		// if we have to chunk, remove the magic header
-		return w.writeChunked(zBytes[2:])
+		return w.writeChunked(zBytes)
 	}
 
 	n, err := w.conn.Write(zBytes)
