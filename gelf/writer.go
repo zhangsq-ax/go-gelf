@@ -101,7 +101,6 @@ func NewWriter(addr string) (*Writer, error) {
 	}
 
 	w.Facility = path.Base(os.Args[0])
-	w.CompressionType = CompressZlib
 
 	return w, nil
 }
