@@ -19,9 +19,10 @@ library's log package.
 		"log"
 		"os"
 	)
-	var graylogAddr
 
 	func main() {
+		var graylogAddr string
+
 		flag.StringVar(&graylogAddr, "graylog", "", "graylog server addr")
 		flag.Parse()
 
