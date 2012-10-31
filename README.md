@@ -64,3 +64,8 @@ To Do
 - Tests for chunked messages
 - Reader object that receives messages
 - WriteMessage example
+
+License
+-------
+
+go-gelf is offered under the MIT license, see LICENSE for details.
