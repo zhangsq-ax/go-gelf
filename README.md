@@ -22,7 +22,10 @@ library's log package.  By using an io.MultiWriter, we can log to both
 stdout and graylog - giving us both centralized and local logs.
 (Redundancy is nice).
 
+	package main
+
 	import (
+		"flag"
 		"github.com/SocialCodeInc/go-gelf/gelf"
 		"io"
 		"log"
@@ -49,8 +52,12 @@ stdout and graylog - giving us both centralized and local logs.
 		// will appear on stdout, and be sent over UDP to the
 		// specified Graylog2 server.
 
-		...
+		// ...
 	}
+
+This program can then be run as:
+
+	go run test.go -graylog=localhost:12201
 
 Because GELF messages are sent over UDP, graylog server availability
 doesn't impact application performance or response time.  There is a
