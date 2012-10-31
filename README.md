@@ -5,3 +5,35 @@ GELF is greylog2's UDP logging format.  This library provides an API
 that applications can use to log messages directly to a greylog2
 server, along with an io.Writer that can be use to redirect the
 standard library's log messages (or os.Stdout), to a greylog2 server.
+
+Usage
+-----
+
+The easiest way to integrate graylog logging into your go app is by
+having your main function call log.SetOutput from the standard
+library's log package.
+
+	import (
+		"github.com/SocialCodeInc/go-gelf/gelf"
+		"io"
+		"log"
+		"os"
+	)
+	var graylogAddr
+
+	func main() {
+		flag.StringVar(&graylogAddr, "graylog", "", "graylog server addr")
+		flag.Parse()
+
+		if graylogAddr != "" {
+		gelfWriter, err := gelf.NewWriter(graylogAddr)
+			if err != nil {
+				log.Fatalf("gelf.NewWriter: %s", err)
+			}
+			// log to both stderr and graylog2
+			log.SetOutput(io.MultiWriter(os.Stderr, gelfWriter))
+			log.Printf("logging to stderr & graylog2@'%s'", graylogAddr)
+		}
+
+		...
+	}
