@@ -6,12 +6,21 @@ that applications can use to log messages directly to a greylog2
 server, along with an io.Writer that can be use to redirect the
 standard library's log messages (or os.Stdout), to a greylog2 server.
 
+Installing
+----------
+
+go-gelf is go get-able:
+
+	go get github.com/SocialCodeInc/go-gelf/gelf
+
 Usage
 -----
 
 The easiest way to integrate graylog logging into your go app is by
 having your main function call log.SetOutput from the standard
-library's log package.
+library's log package.  By using an io.MultiWriter, we can log to both
+stdout and graylog - giving us both centralized and local logs.
+(Redundancy is nice).
 
 	import (
 		"github.com/SocialCodeInc/go-gelf/gelf"
@@ -27,7 +36,7 @@ library's log package.
 		flag.Parse()
 
 		if graylogAddr != "" {
-		gelfWriter, err := gelf.NewWriter(graylogAddr)
+			gelfWriter, err := gelf.NewWriter(graylogAddr)
 			if err != nil {
 				log.Fatalf("gelf.NewWriter: %s", err)
 			}
@@ -36,5 +45,22 @@ library's log package.
 			log.Printf("logging to stderr & graylog2@'%s'", graylogAddr)
 		}
 
+		// From here on out, any calls to log.Print* functions
+		// will appear on stdout, and be sent over UDP to the
+		// specified Graylog2 server.
+
 		...
 	}
+
+Because GELF messages are sent over UDP, graylog server availability
+doesn't impact application performance or response time.  There is a
+small, fixed overhead per log call, regardless of whether the target
+server is reachable or not.
+
+To Do
+-----
+
+- Custom fields
+- Tests for chunked messages
+- Reader object that receives messages
+- WriteMessage example
