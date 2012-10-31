@@ -62,7 +62,6 @@ To Do
 
 - Custom fields
 - Tests for chunked messages
-- Reader object that receives messages
 - WriteMessage example
 
 License

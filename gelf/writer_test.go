@@ -5,13 +5,7 @@
 package gelf
 
 import (
-	"bytes"
-	"compress/gzip"
-	"compress/zlib"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net"
 	"strings"
 	"testing"
 )
@@ -25,19 +19,14 @@ func TestNewWriter(t *testing.T) {
 }
 
 func sendAndRecv(msgData string, compress CompressType) (*Message, error) {
-	addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
+	r, err := NewReader("127.0.0.1:0")
 	if err != nil {
-		return nil, fmt.Errorf("ResolveUDPAddr: %s", err)
+		return nil, fmt.Errorf("NewReader: %s", err)
 	}
 
-	conn, err := net.ListenUDP("udp", addr)
+	w, err := NewWriter(r.Addr())
 	if err != nil {
-		return nil, fmt.Errorf("ListenUDP: %s", err)
-	}
-
-	w, err := NewWriter(conn.LocalAddr().String())
-	if err != nil {
-		return nil, fmt.Errorf("New: %s", err)
+		return nil, fmt.Errorf("NewWriter: %s", err)
 	}
 	w.CompressionType = compress
 
@@ -45,42 +34,7 @@ func sendAndRecv(msgData string, compress CompressType) (*Message, error) {
 		return nil, fmt.Errorf("w.Write: %s", err)
 	}
 
-	// the data we get from the wire is compressed
-	cBuf := make([]byte, ChunkSize)
-
-	n, err := conn.Read(cBuf)
-	if err != nil {
-		return nil, fmt.Errorf("Read: %s", err)
-	}
-	cHead, cBuf := cBuf[:2], cBuf[:n]
-
-	var cReader io.Reader
-	if bytes.Equal(cHead, magicGzip) {
-		cReader, err = gzip.NewReader(bytes.NewReader(cBuf))
-	} else if cHead[0] == magicZlib[0] &&
-		(int(cHead[0]) * 256 + int(cHead[1])) % 31 == 0 {
-		// zlib is slightly more complicated, but correct
-		cReader, err = zlib.NewReader(bytes.NewReader(cBuf))
-	} else {
-		return nil, fmt.Errorf("unknown magic: %x", cHead)
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("NewReader: %s", err)
-	}
-
-	var buf bytes.Buffer
-	_, err = io.Copy(&buf, cReader)
-	if err != nil {
-		return nil, fmt.Errorf("io.Copy: %s", err)
-	}
-
-	msg := new(Message)
-	if err := json.Unmarshal(buf.Bytes(), &msg); err != nil {
-		return nil, fmt.Errorf("json.Unmarshal: %s", err)
-	}
-
-	return msg, nil
+	return r.ReadMessage()
 }
 
 // tests single-message (non-chunked) messages that are split over
