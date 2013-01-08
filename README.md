@@ -51,6 +51,8 @@ giving us both centralized and local logs.  (Redundancy is nice).
 		// will appear on stdout, and be sent over UDP to the
 		// specified Graylog2 server.
 
+		log.Printf("Hello gray World")
+
 		// ...
 	}
 
