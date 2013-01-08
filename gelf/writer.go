@@ -222,17 +222,16 @@ func (w *Writer) Notice(m string) (err error)
 func (w *Writer) Warning(m string) (err error)
 */
 
-// getCallerIgnoringLog returns the filename and the line info of a
-// function further down in the call stack.  Passing 0 in as callDepth
-// would return info on the function calling getCallerIgnoringLog, 1
-// the parent function, and so on.  The exception is that if the frame
-// that is pointed to is from the go log library, included with go, it
-// is ignored, and the function that called e.g. log.Println() is
-// returned.
-func getCallerIgnoringLog(callDepth int) (file string, line int) {
-	// bump by 1 to ignore the getCallerIgnoringLog (this) stackframe
+// getCaller returns the filename and the line info of a function
+// further down in the call stack.  Passing 0 in as callDepth would
+// return info on the function calling getCallerIgnoringLog, 1 the
+// parent function, and so on.  Any suffixes passed to getCaller are
+// path fragments like "/pkg/log/log.go", and functions in the call
+// stack from that file are ignored.
+func getCaller(callDepth int, suffixesToIgnore ...string) (file string, line int) {
+	// bump by 1 to ignore the getCaller (this) stackframe
 	callDepth++
-
+outer:
 	for {
 		var ok bool
 		_, file, line, ok = runtime.Caller(callDepth)
@@ -241,13 +240,21 @@ func getCallerIgnoringLog(callDepth int) (file string, line int) {
 			line = 0
 			break
 		}
-		if !strings.HasSuffix(file, "/pkg/log/log.go") &&
-			!strings.HasSuffix(file, "/pkg/io/multi.go") {
-			break
+
+		for _, s := range suffixesToIgnore {
+			if strings.HasSuffix(file, s) {
+				callDepth++
+				continue outer
+			}
 		}
-		callDepth++
+		break
 	}
 	return
+}
+
+func getCallerIgnoringLogMulti(callDepth int) (string, int) {
+	// the +1 is to ignore this (getCallerIgnoringLogMulti) frame
+	return getCaller(callDepth+1, "/pkg/log/log.go", "/pkg/io/multi.go")
 }
 
 // Write encodes the given string in a GELF message and sends it to
@@ -255,7 +262,7 @@ func getCallerIgnoringLog(callDepth int) (file string, line int) {
 func (w *Writer) Write(p []byte) (n int, err error) {
 
 	// 1 for the function that called us.
-	file, line := getCallerIgnoringLog(1)
+	file, line := getCallerIgnoringLogMulti(1)
 
 	// remove trailing and leading whitespace
 	p = bytes.TrimSpace(p)

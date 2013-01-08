@@ -98,13 +98,13 @@ func TestWriteSmallOneLine(t *testing.T) {
 }
 
 func TestGetCaller(t *testing.T) {
-	file, line := getCallerIgnoringLog(1000)
+	file, line := getCallerIgnoringLogMulti(1000)
 	if line != 0 || file != "???" {
 		t.Errorf("didn't fail 1 %s %d", file, line)
 		return
 	}
 
-	file, _ = getCallerIgnoringLog(0)
+	file, _ = getCallerIgnoringLogMulti(0)
 	if !strings.HasSuffix(file, "/gelf/writer_test.go") {
 		t.Errorf("not writer_test.go? %s", file)
 	}
