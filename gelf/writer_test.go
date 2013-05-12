@@ -5,6 +5,8 @@
 package gelf
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"testing"
@@ -109,3 +111,39 @@ func TestGetCaller(t *testing.T) {
 		t.Errorf("not writer_test.go? %s", file)
 	}
 }
+
+// tests single-message (chunked) messages
+func TestWriteBigChunked(t *testing.T) {
+	randData := make([]byte, 4096)
+	if _, err := rand.Read(randData); err != nil {
+		t.Errorf("cannot get random data: %s", err)
+		return
+	}
+	msgData := "awesomesauce\n" + base64.StdEncoding.EncodeToString(randData)
+
+	for _, i := range []CompressType{CompressGzip, CompressZlib} {
+		msg, err := sendAndRecv(msgData, i)
+		if err != nil {
+			t.Errorf("sendAndRecv: %s", err)
+			return
+		}
+
+		if msg.Short != "awesomesauce" {
+			t.Errorf("msg.Short: expected %s, got %s", msgData, msg.Full)
+			return
+		}
+
+		if msg.Full != msgData {
+			t.Errorf("msg.Full: expected %s, got %s", msgData, msg.Full)
+			return
+		}
+
+		fileExpected := "/go-gelf/gelf/writer_test.go"
+		if !strings.HasSuffix(msg.File, fileExpected) {
+			t.Errorf("msg.File: expected %s, got %s", fileExpected,
+				msg.File)
+		}
+	}
+}
+
+// tests single-message (non-chunked) messages that are a single line long

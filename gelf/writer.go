@@ -6,9 +6,9 @@ package gelf
 
 import (
 	"bytes"
+	"compress/flate"
 	"compress/gzip"
 	"compress/zlib"
-	"compress/flate"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -64,15 +64,15 @@ type Message struct {
 //
 // TODO: generate dynamically using Path MTU Discovery?
 const (
-	ChunkSize = 1420
+	ChunkSize        = 1420
 	chunkedHeaderLen = 12
-	chunkedDataLen = ChunkSize - chunkedHeaderLen
+	chunkedDataLen   = ChunkSize - chunkedHeaderLen
 )
 
 var (
 	magicChunked = []byte{0x1e, 0x0f}
-	magicZlib = []byte{0x78}
-	magicGzip = []byte{0x1f, 0x8b}
+	magicZlib    = []byte{0x78}
+	magicGzip    = []byte{0x1f, 0x8b}
 )
 
 // numChunks returns the number of GELF chunks necessary to transmit
@@ -141,8 +141,8 @@ func (w *Writer) writeChunked(zBytes []byte) (err error) {
 		if chunkLen > bytesLeft {
 			chunkLen = bytesLeft
 		}
-		off := int(i)*chunkedDataLen
-		chunk := zBytes[off:off+chunkLen]
+		off := int(i) * chunkedDataLen
+		chunk := zBytes[off : off+chunkLen]
 		buf.Write(chunk)
 
 		// write this chunk, and make sure the write was good
