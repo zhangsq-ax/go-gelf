@@ -302,24 +302,25 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 func (m *Message) MarshalJSON() ([]byte, error) {
 	var err error
 	var b, eb []byte
-	if len(m.Extra) > 0 {
-		if eb, err = json.Marshal(m.Extra); err != nil {
-			return nil, err
-		}
-	}
+
 	extra := m.Extra
-	im := (*innerMessage)(m)
-	im.Extra = nil
-	if b, err = json.Marshal(im); err != nil {
-		m.Extra = extra
-		return b, err
+	b, err = json.Marshal((*innerMessage)(m))
+	m.Extra = extra
+	if err != nil {
+		return nil, err
 	}
-	if extra != nil && len(extra) > 0 && len(eb) > 0 {
-		m.Extra = extra
-		//fmt.Printf("b=%s\neb=%s\n", b, eb)
-		return append(append(b[:len(b)-1], ','), eb[1:len(eb)]...), nil
+
+	if len(extra) == 0 {
+		return b, nil
 	}
-	return b, nil
+
+	if eb, err = json.Marshal(extra); err != nil {
+		return nil, err
+	}
+
+	// merge serialized message + serialized extra map
+	b[len(b)-1] = ','
+	return append(b, eb[1:len(eb)]...), nil
 }
 
 func (m *Message) UnmarshalJSON(data []byte) error {
