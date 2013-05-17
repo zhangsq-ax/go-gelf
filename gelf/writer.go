@@ -289,7 +289,7 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 		Facility: w.Facility,
 		File:     file,
 		Line:     line,
-		Extra:    map[string]interface{}{"_a": "b", "C": 9},
+		Extra:    map[string]interface{}{},
 	}
 
 	if err = w.WriteMessage(&m); err != nil {

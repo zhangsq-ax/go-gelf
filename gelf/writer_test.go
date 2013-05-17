@@ -116,6 +116,12 @@ func TestWriteSmallOneLine(t *testing.T) {
 	if !strings.HasSuffix(msg.File, fileExpected) {
 		t.Errorf("msg.File: expected %s, got %s", fileExpected,
 			msg.File)
+		return
+	}
+
+	if len(msg.Extra) != 0 {
+		t.Errorf("extra extra fields in %v (expect empty)", msg.Extra)
+		return
 	}
 }
 
