@@ -45,19 +45,20 @@ const (
 
 // Message represents the contents of the GELF message.  It is gzipped
 // before sending.
-//
-// TODO: support optional ('_'-prefixed) fields?
 type Message struct {
-	Version  string `json:"version"`
-	Host     string `json:"host"`
-	Short    string `json:"short_message"`
-	Full     string `json:"full_message"`
-	TimeUnix int64  `json:"timestamp"`
-	Level    int32  `json:"level"`
-	Facility string `json:"facility"`
-	File     string `json:"file"`
-	Line     int    `json:"line"`
+	Version  string                 `json:"version"`
+	Host     string                 `json:"host"`
+	Short    string                 `json:"short_message"`
+	Full     string                 `json:"full_message"`
+	TimeUnix int64                  `json:"timestamp"`
+	Level    int32                  `json:"level"`
+	Facility string                 `json:"facility"`
+	File     string                 `json:"file"`
+	Line     int                    `json:"line"`
+	Extra    map[string]interface{} `json:"-"`
 }
+
+type innerMessage Message //against circular (Un)MarshalJSON
 
 // Used to control GELF chunking.  Should be less than (MTU - len(UDP
 // header)).
@@ -158,9 +159,9 @@ func (w *Writer) writeChunked(zBytes []byte) (err error) {
 
 		bytesLeft -= chunkLen
 	}
-	// debugging
+
 	if bytesLeft != 0 {
-		panic("aw shit")
+		return fmt.Errorf("error: %d bytes left after sending", bytesLeft)
 	}
 	return nil
 }
@@ -288,6 +289,7 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 		Facility: w.Facility,
 		File:     file,
 		Line:     line,
+		Extra:    map[string]interface{}{},
 	}
 
 	if err = w.WriteMessage(&m); err != nil {
@@ -295,4 +297,65 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 	}
 
 	return len(p), nil
+}
+
+func (m *Message) MarshalJSON() ([]byte, error) {
+	var err error
+	var b, eb []byte
+
+	extra := m.Extra
+	b, err = json.Marshal((*innerMessage)(m))
+	m.Extra = extra
+	if err != nil {
+		return nil, err
+	}
+
+	if len(extra) == 0 {
+		return b, nil
+	}
+
+	if eb, err = json.Marshal(extra); err != nil {
+		return nil, err
+	}
+
+	// merge serialized message + serialized extra map
+	b[len(b)-1] = ','
+	return append(b, eb[1:len(eb)]...), nil
+}
+
+func (m *Message) UnmarshalJSON(data []byte) error {
+	i := make(map[string]interface{}, 16)
+	if err := json.Unmarshal(data, &i); err != nil {
+		return err
+	}
+	for k, v := range i {
+		if k[0] == '_' {
+			if m.Extra == nil {
+				m.Extra = make(map[string]interface{}, 1)
+			}
+			m.Extra[k] = v
+			continue
+		}
+		switch k {
+		case "version":
+			m.Version = v.(string)
+		case "host":
+			m.Host = v.(string)
+		case "short_message":
+			m.Short = v.(string)
+		case "full_message":
+			m.Full = v.(string)
+		case "timestamp":
+			m.TimeUnix = int64(v.(float64))
+		case "level":
+			m.Level = int32(v.(float64))
+		case "facility":
+			m.Facility = v.(string)
+		case "file":
+			m.File = v.(string)
+		case "line":
+			m.Line = int(v.(float64))
+		}
+	}
+	return nil
 }
