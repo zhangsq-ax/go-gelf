@@ -159,9 +159,9 @@ func (w *Writer) writeChunked(zBytes []byte) (err error) {
 
 		bytesLeft -= chunkLen
 	}
-	// debugging
+
 	if bytesLeft != 0 {
-		panic("aw shit")
+		return fmt.Errorf("error: %d bytes left after sending", bytesLeft)
 	}
 	return nil
 }
@@ -329,7 +329,6 @@ func (m *Message) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	for k, v := range i {
-		//fmt.Printf("%s: %v\n", k, v)
 		if k[0] == '_' {
 			if m.Extra == nil {
 				m.Extra = make(map[string]interface{}, 1)
