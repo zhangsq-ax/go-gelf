@@ -17,7 +17,7 @@ import (
 )
 
 type Reader struct {
-	mu sync.Mutex
+	mu   sync.Mutex
 	conn net.Conn
 }
 
@@ -62,33 +62,74 @@ func (r *Reader) Read(p []byte) (int, error) {
 }
 
 func (r *Reader) ReadMessage() (*Message, error) {
-	// the data we get from the wire is compressed
 	cBuf := make([]byte, ChunkSize)
+	var (
+		err        error
+		n, length  int
+		buf        bytes.Buffer
+		cid, ocid  []byte
+		seq, total uint8
+		cHead      []byte
+		cReader    io.Reader
+		chunks     [][]byte
+	)
 
-	n, err := r.conn.Read(cBuf)
-	if err != nil {
-		return nil, fmt.Errorf("Read: %s", err)
+	for got := 0; got < 128 && (total == 0 || got < int(total)); got++ {
+		if n, err = r.conn.Read(cBuf); err != nil {
+			return nil, fmt.Errorf("Read: %s", err)
+		}
+		cHead, cBuf = cBuf[:2], cBuf[:n]
+
+		if bytes.Equal(cHead, magicChunked) {
+			//fmt.Printf("chunked %v\n", cBuf[:14])
+			cid, seq, total = cBuf[2:2+8], cBuf[2+8], cBuf[2+8+1]
+			if ocid != nil && !bytes.Equal(cid, ocid) {
+				return nil, fmt.Errorf("out-of-band message %v (awaited %v)", cid, ocid)
+			} else if ocid == nil {
+				ocid = cid
+				chunks = make([][]byte, total)
+			}
+			n = len(cBuf) - chunkedHeaderLen
+			//fmt.Printf("setting chunks[%d]: %d\n", seq, n)
+			chunks[seq] = append(make([]byte, 0, n), cBuf[chunkedHeaderLen:]...)
+			length += n
+		} else { //not chunked
+			if total > 0 {
+				return nil, fmt.Errorf("out-of-band message (not chunked)")
+			}
+			break
+		}
 	}
-	cHead, cBuf := cBuf[:2], cBuf[:n]
+	//fmt.Printf("\nchunks: %v\n", chunks)
 
-	var cReader io.Reader
+	if length > 0 {
+		if cap(cBuf) < length {
+			cBuf = append(cBuf, make([]byte, 0, length-cap(cBuf))...)
+		}
+		cBuf = cBuf[:0]
+		for i := range chunks {
+			//fmt.Printf("appending %d %v\n", i, chunks[i])
+			cBuf = append(cBuf, chunks[i]...)
+		}
+		cHead = cBuf[:2]
+	}
+
+	// the data we get from the wire is compressed
 	if bytes.Equal(cHead, magicGzip) {
 		cReader, err = gzip.NewReader(bytes.NewReader(cBuf))
 	} else if cHead[0] == magicZlib[0] &&
-		(int(cHead[0]) * 256 + int(cHead[1])) % 31 == 0 {
+		(int(cHead[0])*256+int(cHead[1]))%31 == 0 {
 		// zlib is slightly more complicated, but correct
 		cReader, err = zlib.NewReader(bytes.NewReader(cBuf))
 	} else {
-		return nil, fmt.Errorf("unknown magic: %x", cHead)
+		return nil, fmt.Errorf("unknown magic: %x %v", cHead, cHead)
 	}
 
 	if err != nil {
 		return nil, fmt.Errorf("NewReader: %s", err)
 	}
 
-	var buf bytes.Buffer
-	_, err = io.Copy(&buf, cReader)
-	if err != nil {
+	if _, err = io.Copy(&buf, cReader); err != nil {
 		return nil, fmt.Errorf("io.Copy: %s", err)
 	}
 
