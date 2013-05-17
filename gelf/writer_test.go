@@ -106,9 +106,14 @@ func TestGetCaller(t *testing.T) {
 		return
 	}
 
+	file, _ = getCaller(0)
+	if !strings.HasSuffix(file, "/gelf/writer_test.go") {
+		t.Errorf("not writer_test.go 1? %s", file)
+	}
+
 	file, _ = getCallerIgnoringLogMulti(0)
 	if !strings.HasSuffix(file, "/gelf/writer_test.go") {
-		t.Errorf("not writer_test.go? %s", file)
+		t.Errorf("not writer_test.go 2? %s", file)
 	}
 }
 
