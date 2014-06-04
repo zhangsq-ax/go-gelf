@@ -50,11 +50,9 @@ type Message struct {
 	Host     string                 `json:"host"`
 	Short    string                 `json:"short_message"`
 	Full     string                 `json:"full_message"`
-	TimeUnix int64                  `json:"timestamp"`
+	TimeUnix float64                `json:"timestamp"`
 	Level    int32                  `json:"level"`
 	Facility string                 `json:"facility"`
-	File     string                 `json:"file"`
-	Line     int                    `json:"line"`
 	Extra    map[string]interface{} `json:"-"`
 }
 
@@ -280,16 +278,17 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 	}
 
 	m := Message{
-		Version:  "1.0",
+		Version:  "1.1",
 		Host:     w.hostname,
 		Short:    string(short),
 		Full:     string(full),
-		TimeUnix: time.Now().Unix(),
+		TimeUnix: float64(time.Now().Unix()),
 		Level:    6, // info
 		Facility: w.Facility,
-		File:     file,
-		Line:     line,
-		Extra:    map[string]interface{}{},
+		Extra: map[string]interface{}{
+			"_file": file,
+			"_line": line,
+		},
 	}
 
 	if err = w.WriteMessage(&m); err != nil {
@@ -346,15 +345,11 @@ func (m *Message) UnmarshalJSON(data []byte) error {
 		case "full_message":
 			m.Full = v.(string)
 		case "timestamp":
-			m.TimeUnix = int64(v.(float64))
+			m.TimeUnix = v.(float64)
 		case "level":
 			m.Level = int32(v.(float64))
 		case "facility":
 			m.Facility = v.(string)
-		case "file":
-			m.File = v.(string)
-		case "line":
-			m.Line = int(v.(float64))
 		}
 	}
 	return nil

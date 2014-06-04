@@ -80,12 +80,6 @@ func TestWriteSmallMultiLine(t *testing.T) {
 			t.Errorf("msg.Full: expected %s, got %s", msgData, msg.Full)
 			return
 		}
-
-		fileExpected := "/go-gelf/gelf/writer_test.go"
-		if !strings.HasSuffix(msg.File, fileExpected) {
-			t.Errorf("msg.File: expected %s, got %s", fileExpected,
-				msg.File)
-		}
 	}
 }
 
@@ -113,14 +107,14 @@ func TestWriteSmallOneLine(t *testing.T) {
 	}
 
 	fileExpected := "/go-gelf/gelf/writer_test.go"
-	if !strings.HasSuffix(msg.File, fileExpected) {
+	if !strings.HasSuffix(msg.Extra["_file"].(string), fileExpected) {
 		t.Errorf("msg.File: expected %s, got %s", fileExpected,
-			msg.File)
+			msg.Extra["_file"].(string))
 		return
 	}
 
-	if len(msg.Extra) != 0 {
-		t.Errorf("extra extra fields in %v (expect empty)", msg.Extra)
+	if len(msg.Extra) != 2 {
+		t.Errorf("extra extra fields in %v (expect only file and line)", msg.Extra)
 		return
 	}
 }
@@ -168,12 +162,6 @@ func TestWriteBigChunked(t *testing.T) {
 			t.Errorf("msg.Full: expected %s, got %s", msgData, msg.Full)
 			return
 		}
-
-		fileExpected := "/go-gelf/gelf/writer_test.go"
-		if !strings.HasSuffix(msg.File, fileExpected) {
-			t.Errorf("msg.File: expected %s, got %s", fileExpected,
-				msg.File)
-		}
 	}
 }
 
@@ -182,7 +170,12 @@ func TestExtraData(t *testing.T) {
 
 	// time.Now().Unix() seems fine, UnixNano() won't roundtrip
 	// through string -> float64 -> int64
-	extra := map[string]interface{}{"_a": 10 * time.Now().Unix(), "C": 9}
+	extra := map[string]interface{}{
+		"_a":    10 * time.Now().Unix(),
+		"C":     9,
+		"_file": "writer_test.go",
+		"_line": 186,
+	}
 
 	short := "quick"
 	full := short + "\nwith more detail"
@@ -191,11 +184,9 @@ func TestExtraData(t *testing.T) {
 		Host:     "fake-host",
 		Short:    string(short),
 		Full:     string(full),
-		TimeUnix: time.Now().Unix(),
+		TimeUnix: float64(time.Now().Unix()),
 		Level:    6, // info
 		Facility: "writer_test",
-		File:     "writer_test.go",
-		Line:     186,
 		Extra:    extra,
 	}
 
@@ -216,18 +207,23 @@ func TestExtraData(t *testing.T) {
 			return
 		}
 
-		if msg.File != "writer_test.go" {
-			t.Errorf("msg.File: expected writer_test.go, got %s", msg.File)
-			return
-		}
-
-		if len(msg.Extra) != 1 {
+		if len(msg.Extra) != 3 {
 			t.Errorf("extra extra fields in %v", msg.Extra)
 			return
 		}
 
 		if int64(msg.Extra["_a"].(float64)) != extra["_a"].(int64) {
 			t.Errorf("_a didn't roundtrip (%v != %v)", int64(msg.Extra["_a"].(float64)), extra["_a"].(int64))
+			return
+		}
+
+		if string(msg.Extra["_file"].(string)) != extra["_file"] {
+			t.Errorf("_file didn't roundtrip (%v != %v)", msg.Extra["_file"].(string), extra["_file"].(string))
+			return
+		}
+
+		if int(msg.Extra["_line"].(float64)) != extra["_line"].(int) {
+			t.Errorf("_line didn't roundtrip (%v != %v)", int(msg.Extra["_line"].(float64)), extra["_line"].(int))
 			return
 		}
 	}
