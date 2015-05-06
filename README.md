@@ -11,7 +11,7 @@ Installing
 
 go-gelf is go get-able:
 
-	go get github.com/SocialCodeInc/go-gelf/gelf
+	go get github.com/Graylog2/go-gelf/gelf
 
 Usage
 -----
@@ -25,7 +25,7 @@ giving us both centralized and local logs.  (Redundancy is nice).
 
 	import (
 		"flag"
-		"github.com/SocialCodeInc/go-gelf/gelf"
+		"github.com/Graylog2/go-gelf/gelf"
 		"io"
 		"log"
 		"os"
