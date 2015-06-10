@@ -114,7 +114,7 @@ func TestWriteSmallOneLine(t *testing.T) {
 	}
 
 	if len(msg.Extra) != 2 {
-		t.Errorf("extra extra fields in %v (expect only file and line)", msg.Extra)
+		t.Errorf("extra fields in %v (expect only file and line)", msg.Extra)
 		return
 	}
 }
