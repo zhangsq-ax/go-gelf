@@ -8,6 +8,7 @@ import (
 	"compress/flate"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -245,7 +246,16 @@ func BenchmarkWriteBestSpeed(b *testing.B) {
 	w.CompressionLevel = flate.BestSpeed
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		w.Write([]byte("This is a message"))
+		w.WriteMessage(&Message{
+			Version:  "1.1",
+			Host:     w.hostname,
+			Short:    "short message",
+			Full:     "full message",
+			TimeUnix: float64(time.Now().Unix()),
+			Level:    6, // info
+			Facility: w.Facility,
+			Extra:    map[string]interface{}{"_file": "1234", "_line": "3456"},
+		})
 	}
 }
 
@@ -262,7 +272,16 @@ func BenchmarkWriteNoCompression(b *testing.B) {
 	w.CompressionLevel = flate.NoCompression
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		w.Write([]byte("This is a message"))
+		w.WriteMessage(&Message{
+			Version:  "1.1",
+			Host:     w.hostname,
+			Short:    "short message",
+			Full:     "full message",
+			TimeUnix: float64(time.Now().Unix()),
+			Level:    6, // info
+			Facility: w.Facility,
+			Extra:    map[string]interface{}{"_file": "1234", "_line": "3456"},
+		})
 	}
 }
 
@@ -279,6 +298,41 @@ func BenchmarkWriteDisableCompressionCompletely(b *testing.B) {
 	w.CompressionType = CompressNone
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		w.Write([]byte("This is a message"))
+		w.WriteMessage(&Message{
+			Version:  "1.1",
+			Host:     w.hostname,
+			Short:    "short message",
+			Full:     "full message",
+			TimeUnix: float64(time.Now().Unix()),
+			Level:    6, // info
+			Facility: w.Facility,
+			Extra:    map[string]interface{}{"_file": "1234", "_line": "3456"},
+		})
+	}
+}
+
+func BenchmarkWriteDisableCompressionAndPreencodeExtra(b *testing.B) {
+	r, err := NewReader("127.0.0.1:0")
+	if err != nil {
+		b.Fatalf("NewReader: %s", err)
+	}
+	go io.Copy(ioutil.Discard, r)
+	w, err := NewWriter(r.Addr())
+	if err != nil {
+		b.Fatalf("NewWriter: %s", err)
+	}
+	w.CompressionType = CompressNone
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w.WriteMessage(&Message{
+			Version:  "1.1",
+			Host:     w.hostname,
+			Short:    "short message",
+			Full:     "full message",
+			TimeUnix: float64(time.Now().Unix()),
+			Level:    6, // info
+			Facility: w.Facility,
+			RawExtra: json.RawMessage(`{"_file":"1234","_line": "3456"}`),
+		})
 	}
 }

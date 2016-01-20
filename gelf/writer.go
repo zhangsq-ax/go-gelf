@@ -55,6 +55,7 @@ type Message struct {
 	Level    int32                  `json:"level"`
 	Facility string                 `json:"facility"`
 	Extra    map[string]interface{} `json:"-"`
+	RawExtra json.RawMessage        `json:"-"`
 }
 
 // Used to control GELF chunking.  Should be less than (MTU - len(UDP
@@ -363,23 +364,28 @@ func (m *Message) MarshalJSONBuf(buf *bytes.Buffer) error {
 	if _, err = buf.Write(b[:len(b)-1]); err != nil {
 		return err
 	}
-	if len(m.Extra) == 0 {
-		return buf.WriteByte('}')
+	if len(m.Extra) > 0 {
+		eb, err := json.Marshal(m.Extra)
+		if err != nil {
+			return err
+		}
+		// merge serialized message + serialized extra map
+		if err = buf.WriteByte(','); err != nil {
+			return err
+		}
+		// write serialized extra bytes, without enclosing quotes
+		if _, err = buf.Write(eb[1 : len(eb)-1]); err != nil {
+			return err
+		}
 	}
 
-	eb, err := json.Marshal(m.Extra)
-	if err != nil {
-		return err
+	if len(m.RawExtra) > 0 {
+		// write serialized extra bytes, without enclosing quotes
+		if _, err = buf.Write(m.RawExtra[1 : len(m.RawExtra)-1]); err != nil {
+			return err
+		}
 	}
 
-	// merge serialized message + serialized extra map
-	if err = buf.WriteByte(','); err != nil {
-		return err
-	}
-	// write serialized extra bytes, without enclosing quotes
-	if _, err = buf.Write(eb[1 : len(eb)-1]); err != nil {
-		return err
-	}
 	// write final closing quotes
 	return buf.WriteByte('}')
 }
