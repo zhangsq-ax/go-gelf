@@ -242,7 +242,24 @@ func BenchmarkWriteBestSpeed(b *testing.B) {
 	if err != nil {
 		b.Fatalf("NewWriter: %s", err)
 	}
-	w.CompressionType = flate.BestSpeed
+	w.CompressionLevel = flate.BestSpeed
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w.Write([]byte("This is a message"))
+	}
+}
+
+func BenchmarkWriteNoCompression(b *testing.B) {
+	r, err := NewReader("127.0.0.1:0")
+	if err != nil {
+		b.Fatalf("NewReader: %s", err)
+	}
+	go io.Copy(ioutil.Discard, r)
+	w, err := NewWriter(r.Addr())
+	if err != nil {
+		b.Fatalf("NewWriter: %s", err)
+	}
+	w.CompressionLevel = flate.NoCompression
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		w.Write([]byte("This is a message"))
