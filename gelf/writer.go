@@ -76,14 +76,14 @@ var (
 
 // Syslog severity levels
 const (
-  LOG_EMERG   = int32(0)
-  LOG_ALERT   = int32(1)
-  LOG_CRIT    = int32(2)
-  LOG_ERR     = int32(3)
-  LOG_WARNING = int32(4)
-  LOG_NOTICE  = int32(5)
-  LOG_INFO    = int32(6)
-  LOG_DEBUG   = int32(7)
+	LOG_EMERG   = int32(0)
+	LOG_ALERT   = int32(1)
+	LOG_CRIT    = int32(2)
+	LOG_ERR     = int32(3)
+	LOG_WARNING = int32(4)
+	LOG_NOTICE  = int32(5)
+	LOG_INFO    = int32(6)
+	LOG_DEBUG   = int32(7)
 )
 
 // numChunks returns the number of GELF chunks necessary to transmit
@@ -222,8 +222,8 @@ func (w *Writer) WriteMessage(m *Message) (err error) {
 }
 
 // Close connection and interrupt blocked Read or Write operations
-func (w *Writer) Close() (error) {
-  return w.conn.Close()
+func (w *Writer) Close() error {
+	return w.conn.Close()
 }
 
 /*
