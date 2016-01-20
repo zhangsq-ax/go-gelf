@@ -204,8 +204,8 @@ func (w *Writer) WriteMessage(m *Message) (err error) {
 		}
 	}
 
-	if _, err = m.MarshalJSONBuf(mBuf); err != nil {
-		return
+	if err = m.MarshalJSONBuf(mBuf); err != nil {
+		return err
 	}
 	mBytes := mBuf.Bytes()
 
@@ -354,27 +354,34 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-func (m *Message) MarshalJSONBuf(buf *bytes.Buffer) (int, error) {
-	var err error
-	var b, eb []byte
-
-	b, err = json.Marshal(m)
+func (m *Message) MarshalJSONBuf(buf *bytes.Buffer) error {
+	b, err := json.Marshal(m)
 	if err != nil {
-		return 0, err
+		return err
 	}
-
+	// write up until the final }
+	if _, err = buf.Write(b[:len(b)-1]); err != nil {
+		return err
+	}
 	if len(m.Extra) == 0 {
-		return buf.Write(b)
+		return buf.WriteByte('}')
 	}
 
-	if eb, err = json.Marshal(m.Extra); err != nil {
-		return 0, err
+	eb, err := json.Marshal(m.Extra)
+	if err != nil {
+		return err
 	}
 
 	// merge serialized message + serialized extra map
-	b[len(b)-1] = ','
-	b = append(b, eb[1:len(eb)]...)
-	return buf.Write(b)
+	if err = buf.WriteByte(','); err != nil {
+		return err
+	}
+	// write serialized extra bytes, without enclosing quotes
+	if _, err = buf.Write(eb[1 : len(eb)-1]); err != nil {
+		return err
+	}
+	// write final closing quotes
+	return buf.WriteByte('}')
 }
 
 func (m *Message) UnmarshalJSON(data []byte) error {
