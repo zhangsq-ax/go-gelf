@@ -56,8 +56,6 @@ type Message struct {
 	Extra    map[string]interface{} `json:"-"`
 }
 
-type innerMessage Message //against circular (Un)MarshalJSON
-
 // Used to control GELF chunking.  Should be less than (MTU - len(UDP
 // header)).
 //
@@ -181,10 +179,11 @@ func (w *Writer) writeChunked(zBytes []byte) (err error) {
 // filled out appropriately.  In general, clients will want to use
 // Write, rather than WriteMessage.
 func (w *Writer) WriteMessage(m *Message) (err error) {
-	mBytes, err := json.Marshal(m)
-	if err != nil {
+	mBuf := bytes.NewBuffer(nil)
+	if _, err = m.MarshalJSONBuf(mBuf); err != nil {
 		return
 	}
+	mBytes := mBuf.Bytes()
 
 	var zBuf bytes.Buffer
 	var zw io.WriteCloser
@@ -315,28 +314,27 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-func (m *Message) MarshalJSON() ([]byte, error) {
+func (m *Message) MarshalJSONBuf(buf *bytes.Buffer) (int, error) {
 	var err error
 	var b, eb []byte
 
-	extra := m.Extra
-	b, err = json.Marshal((*innerMessage)(m))
-	m.Extra = extra
+	b, err = json.Marshal(m)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
-	if len(extra) == 0 {
-		return b, nil
+	if len(m.Extra) == 0 {
+		return buf.Write(b)
 	}
 
-	if eb, err = json.Marshal(extra); err != nil {
-		return nil, err
+	if eb, err = json.Marshal(m.Extra); err != nil {
+		return 0, err
 	}
 
 	// merge serialized message + serialized extra map
 	b[len(b)-1] = ','
-	return append(b, eb[1:len(eb)]...), nil
+	b = append(b, eb[1:len(eb)]...)
+	return buf.Write(b)
 }
 
 func (m *Message) UnmarshalJSON(data []byte) error {
