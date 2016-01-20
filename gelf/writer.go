@@ -174,24 +174,43 @@ func (w *Writer) writeChunked(zBytes []byte) (err error) {
 	return nil
 }
 
+// 1k bytes buffer by default
+var bufPool = sync.Pool{
+	New: func() interface{} {
+		return bytes.NewBuffer(make([]byte, 0, 1024))
+	},
+}
+
+func newBuffer() *bytes.Buffer {
+	b := bufPool.Get().(*bytes.Buffer)
+	if b != nil {
+		b.Reset()
+		return b
+	}
+	return bytes.NewBuffer(nil)
+}
+
 // WriteMessage sends the specified message to the GELF server
 // specified in the call to New().  It assumes all the fields are
 // filled out appropriately.  In general, clients will want to use
 // Write, rather than WriteMessage.
 func (w *Writer) WriteMessage(m *Message) (err error) {
-	mBuf := bytes.NewBuffer(nil)
+	mBuf := newBuffer()
+	defer bufPool.Put(mBuf)
 	if _, err = m.MarshalJSONBuf(mBuf); err != nil {
 		return
 	}
 	mBytes := mBuf.Bytes()
 
-	var zBuf bytes.Buffer
+	zBuf := newBuffer()
+	defer bufPool.Put(zBuf)
+
 	var zw io.WriteCloser
 	switch w.CompressionType {
 	case CompressGzip:
-		zw, err = gzip.NewWriterLevel(&zBuf, w.CompressionLevel)
+		zw, err = gzip.NewWriterLevel(zBuf, w.CompressionLevel)
 	case CompressZlib:
-		zw, err = zlib.NewWriterLevel(&zBuf, w.CompressionLevel)
+		zw, err = zlib.NewWriterLevel(zBuf, w.CompressionLevel)
 	default:
 		panic(fmt.Sprintf("unknown compression type %d",
 			w.CompressionType))
