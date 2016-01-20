@@ -41,6 +41,7 @@ type CompressType int
 const (
 	CompressGzip CompressType = iota
 	CompressZlib
+	CompressNone
 )
 
 // Message represents the contents of the GELF message.  It is gzipped
@@ -197,37 +198,57 @@ func newBuffer() *bytes.Buffer {
 func (w *Writer) WriteMessage(m *Message) (err error) {
 	mBuf := newBuffer()
 	defer bufPool.Put(mBuf)
+	if w.CompressionType == CompressNone {
+		if _, err = mBuf.Write([]byte{0x1f, 0x3c}); err != nil {
+			return err
+		}
+	}
+
 	if _, err = m.MarshalJSONBuf(mBuf); err != nil {
 		return
 	}
 	mBytes := mBuf.Bytes()
 
-	zBuf := newBuffer()
-	defer bufPool.Put(zBuf)
+	var (
+		zBuf   *bytes.Buffer
+		zBytes []byte
+	)
 
 	var zw io.WriteCloser
 	switch w.CompressionType {
 	case CompressGzip:
+		zBuf = newBuffer()
+		defer bufPool.Put(zBuf)
 		zw, err = gzip.NewWriterLevel(zBuf, w.CompressionLevel)
+		if err != nil {
+			return
+		}
+		if _, err = zw.Write(mBytes); err != nil {
+			return
+		}
+		zw.Close()
+		zBytes = zBuf.Bytes()
 	case CompressZlib:
+		zBuf = newBuffer()
+		defer bufPool.Put(zBuf)
 		zw, err = zlib.NewWriterLevel(zBuf, w.CompressionLevel)
+		if err != nil {
+			return
+		}
+		if _, err = zw.Write(mBytes); err != nil {
+			return
+		}
+		zw.Close()
+		zBytes = zBuf.Bytes()
+	case CompressNone:
+		zBytes = mBytes
 	default:
 		panic(fmt.Sprintf("unknown compression type %d",
 			w.CompressionType))
 	}
-	if err != nil {
-		return
-	}
-	if _, err = zw.Write(mBytes); err != nil {
-		return
-	}
-	zw.Close()
-
-	zBytes := zBuf.Bytes()
 	if numChunks(zBytes) > 1 {
 		return w.writeChunked(zBytes)
 	}
-
 	n, err := w.conn.Write(zBytes)
 	if err != nil {
 		return
