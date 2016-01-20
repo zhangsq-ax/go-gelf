@@ -199,12 +199,13 @@ func newBuffer() *bytes.Buffer {
 func (w *Writer) WriteMessage(m *Message) (err error) {
 	mBuf := newBuffer()
 	defer bufPool.Put(mBuf)
+	// when compression is disabled, prewrite the magic byte before encoding
+	// so we dont have to re-copy the slice after
 	if w.CompressionType == CompressNone {
 		if _, err = mBuf.Write([]byte{0x1f, 0x3c}); err != nil {
 			return err
 		}
 	}
-
 	if err = m.MarshalJSONBuf(mBuf); err != nil {
 		return err
 	}
@@ -221,32 +222,28 @@ func (w *Writer) WriteMessage(m *Message) (err error) {
 		zBuf = newBuffer()
 		defer bufPool.Put(zBuf)
 		zw, err = gzip.NewWriterLevel(zBuf, w.CompressionLevel)
-		if err != nil {
-			return
-		}
-		if _, err = zw.Write(mBytes); err != nil {
-			return
-		}
-		zw.Close()
-		zBytes = zBuf.Bytes()
 	case CompressZlib:
 		zBuf = newBuffer()
 		defer bufPool.Put(zBuf)
 		zw, err = zlib.NewWriterLevel(zBuf, w.CompressionLevel)
-		if err != nil {
-			return
-		}
-		if _, err = zw.Write(mBytes); err != nil {
-			return
-		}
-		zw.Close()
-		zBytes = zBuf.Bytes()
 	case CompressNone:
 		zBytes = mBytes
 	default:
 		panic(fmt.Sprintf("unknown compression type %d",
 			w.CompressionType))
 	}
+	if zw != nil {
+		if err != nil {
+			return
+		}
+		if _, err = zw.Write(mBytes); err != nil {
+			zw.Close()
+			return
+		}
+		zw.Close()
+		zBytes = zBuf.Bytes()
+	}
+
 	if numChunks(zBytes) > 1 {
 		return w.writeChunked(zBytes)
 	}
