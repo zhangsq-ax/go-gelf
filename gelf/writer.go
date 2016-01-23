@@ -41,6 +41,7 @@ type CompressType int
 const (
 	CompressGzip CompressType = iota
 	CompressZlib
+	CompressNone
 )
 
 // Message represents the contents of the GELF message.  It is gzipped
@@ -54,9 +55,8 @@ type Message struct {
 	Level    int32                  `json:"level,omitempty"`
 	Facility string                 `json:"facility,omitempty"`
 	Extra    map[string]interface{} `json:"-"`
+	RawExtra json.RawMessage        `json:"-"`
 }
-
-type innerMessage Message //against circular (Un)MarshalJSON
 
 // Used to control GELF chunking.  Should be less than (MTU - len(UDP
 // header)).
@@ -176,40 +176,77 @@ func (w *Writer) writeChunked(zBytes []byte) (err error) {
 	return nil
 }
 
+// 1k bytes buffer by default
+var bufPool = sync.Pool{
+	New: func() interface{} {
+		return bytes.NewBuffer(make([]byte, 0, 1024))
+	},
+}
+
+func newBuffer() *bytes.Buffer {
+	b := bufPool.Get().(*bytes.Buffer)
+	if b != nil {
+		b.Reset()
+		return b
+	}
+	return bytes.NewBuffer(nil)
+}
+
 // WriteMessage sends the specified message to the GELF server
 // specified in the call to New().  It assumes all the fields are
 // filled out appropriately.  In general, clients will want to use
 // Write, rather than WriteMessage.
 func (w *Writer) WriteMessage(m *Message) (err error) {
-	mBytes, err := json.Marshal(m)
-	if err != nil {
-		return
+	mBuf := newBuffer()
+	defer bufPool.Put(mBuf)
+	// when compression is disabled, prewrite the magic byte before encoding
+	// so we dont have to re-copy the slice after
+	if w.CompressionType == CompressNone {
+		if _, err = mBuf.Write([]byte{0x1f, 0x3c}); err != nil {
+			return err
+		}
 	}
+	if err = m.MarshalJSONBuf(mBuf); err != nil {
+		return err
+	}
+	mBytes := mBuf.Bytes()
 
-	var zBuf bytes.Buffer
+	var (
+		zBuf   *bytes.Buffer
+		zBytes []byte
+	)
+
 	var zw io.WriteCloser
 	switch w.CompressionType {
 	case CompressGzip:
-		zw, err = gzip.NewWriterLevel(&zBuf, w.CompressionLevel)
+		zBuf = newBuffer()
+		defer bufPool.Put(zBuf)
+		zw, err = gzip.NewWriterLevel(zBuf, w.CompressionLevel)
 	case CompressZlib:
-		zw, err = zlib.NewWriterLevel(&zBuf, w.CompressionLevel)
+		zBuf = newBuffer()
+		defer bufPool.Put(zBuf)
+		zw, err = zlib.NewWriterLevel(zBuf, w.CompressionLevel)
+	case CompressNone:
+		zBytes = mBytes
 	default:
 		panic(fmt.Sprintf("unknown compression type %d",
 			w.CompressionType))
 	}
-	if err != nil {
-		return
+	if zw != nil {
+		if err != nil {
+			return
+		}
+		if _, err = zw.Write(mBytes); err != nil {
+			zw.Close()
+			return
+		}
+		zw.Close()
+		zBytes = zBuf.Bytes()
 	}
-	if _, err = zw.Write(mBytes); err != nil {
-		return
-	}
-	zw.Close()
 
-	zBytes := zBuf.Bytes()
 	if numChunks(zBytes) > 1 {
 		return w.writeChunked(zBytes)
 	}
-
 	n, err := w.conn.Write(zBytes)
 	if err != nil {
 		return
@@ -315,28 +352,39 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-func (m *Message) MarshalJSON() ([]byte, error) {
-	var err error
-	var b, eb []byte
-
-	extra := m.Extra
-	b, err = json.Marshal((*innerMessage)(m))
-	m.Extra = extra
+func (m *Message) MarshalJSONBuf(buf *bytes.Buffer) error {
+	b, err := json.Marshal(m)
 	if err != nil {
-		return nil, err
+		return err
+	}
+	// write up until the final }
+	if _, err = buf.Write(b[:len(b)-1]); err != nil {
+		return err
+	}
+	if len(m.Extra) > 0 {
+		eb, err := json.Marshal(m.Extra)
+		if err != nil {
+			return err
+		}
+		// merge serialized message + serialized extra map
+		if err = buf.WriteByte(','); err != nil {
+			return err
+		}
+		// write serialized extra bytes, without enclosing quotes
+		if _, err = buf.Write(eb[1 : len(eb)-1]); err != nil {
+			return err
+		}
 	}
 
-	if len(extra) == 0 {
-		return b, nil
+	if len(m.RawExtra) > 0 {
+		// write serialized extra bytes, without enclosing quotes
+		if _, err = buf.Write(m.RawExtra[1 : len(m.RawExtra)-1]); err != nil {
+			return err
+		}
 	}
 
-	if eb, err = json.Marshal(extra); err != nil {
-		return nil, err
-	}
-
-	// merge serialized message + serialized extra map
-	b[len(b)-1] = ','
-	return append(b, eb[1:len(eb)]...), nil
+	// write final closing quotes
+	return buf.WriteByte('}')
 }
 
 func (m *Message) UnmarshalJSON(data []byte) error {
