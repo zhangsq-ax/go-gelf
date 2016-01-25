@@ -66,7 +66,7 @@ func sendAndRecvMsg(msg *Message, compress CompressType) (*Message, error) {
 // tests single-message (non-chunked) messages that are split over
 // multiple lines
 func TestWriteSmallMultiLine(t *testing.T) {
-	for _, i := range []CompressType{CompressGzip, CompressZlib} {
+	for _, i := range []CompressType{CompressGzip, CompressZlib, CompressNone} {
 		msgData := "awesomesauce\nbananas"
 
 		msg, err := sendAndRecv(msgData, i)

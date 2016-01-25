@@ -199,13 +199,6 @@ func newBuffer() *bytes.Buffer {
 func (w *Writer) WriteMessage(m *Message) (err error) {
 	mBuf := newBuffer()
 	defer bufPool.Put(mBuf)
-	// when compression is disabled, prewrite the magic byte before encoding
-	// so we dont have to re-copy the slice after
-	if w.CompressionType == CompressNone {
-		if _, err = mBuf.Write([]byte{0x1f, 0x3c}); err != nil {
-			return err
-		}
-	}
 	if err = m.MarshalJSONBuf(mBuf); err != nil {
 		return err
 	}
