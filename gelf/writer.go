@@ -370,6 +370,10 @@ func (m *Message) MarshalJSONBuf(buf *bytes.Buffer) error {
 	}
 
 	if len(m.RawExtra) > 0 {
+		if err := buf.WriteByte(','); err != nil {
+			return err
+		}
+
 		// write serialized extra bytes, without enclosing quotes
 		if _, err = buf.Write(m.RawExtra[1 : len(m.RawExtra)-1]); err != nil {
 			return err
