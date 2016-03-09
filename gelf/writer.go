@@ -124,14 +124,15 @@ func NewWriter(addr string) (*Writer, error) {
 
 func (w *Writer) periodicDnsRefresh() {
 	go func() {
-		serverHost := strings.Split(w.server, ":")[0]
+		serverHostname := strings.Split(w.server, ":")[0]
 		for {
 			if w.DnsRefresh > 0 {
 				time.Sleep(time.Duration(w.DnsRefresh) * time.Second)
 				needReconnect := true
-				if serverIps, err := net.LookupHost(serverHost); err == nil {
-					for _, ip := range serverIps {
-						if ip == w.conn.RemoteAddr().String() {
+				serverIp := strings.Split(w.conn.RemoteAddr().String(), ":")[0]
+				if serverIps, err := net.LookupHost(serverHostname); err == nil {
+					for _, lookupIp := range serverIps {
+						if lookupIp == serverIp {
 							needReconnect = false
 						}
 					}
