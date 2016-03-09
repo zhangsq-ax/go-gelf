@@ -23,19 +23,21 @@ import (
 )
 
 // Writer implements io.Writer and is used to send both discrete
-// messages to a graylog2 server, or data from a stream-oriented
+// messages to a Graylog server, or data from a stream-oriented
 // interface (like the functions in log).
 type Writer struct {
 	mu               sync.Mutex
 	conn             net.Conn
+	server           string
 	hostname         string
 	Facility         string // defaults to current process name
 	CompressionLevel int    // one of the consts from compress/flate
 	CompressionType  CompressType
+	DnsRefresh       int
 }
 
 // What compression type the writer should use when sending messages
-// to the graylog2 server
+// to the Graylog server
 type CompressType int
 
 const (
@@ -102,7 +104,10 @@ func numChunks(b []byte) int {
 func NewWriter(addr string) (*Writer, error) {
 	var err error
 	w := new(Writer)
+	w.CompressionType = CompressNone
 	w.CompressionLevel = flate.BestSpeed
+	w.DnsRefresh = 10 // 0 = Disable DNS refresh
+	w.server = addr
 
 	if w.conn, err = net.Dial("udp", addr); err != nil {
 		return nil, err
@@ -112,13 +117,38 @@ func NewWriter(addr string) (*Writer, error) {
 	}
 
 	w.Facility = path.Base(os.Args[0])
+	w.periodicDnsRefresh()
 
 	return w, nil
 }
 
+func (w *Writer) periodicDnsRefresh() {
+	go func() {
+		serverHost := strings.Split(w.server, ":")[0]
+		for {
+			if w.DnsRefresh > 0 {
+				time.Sleep(time.Duration(w.DnsRefresh) * time.Second)
+				needReconnect := true
+				if serverIps, err := net.LookupHost(serverHost); err == nil {
+					for _, ip := range serverIps {
+						if ip == w.conn.RemoteAddr().String() {
+							needReconnect = false
+						}
+					}
+					if needReconnect {
+						w.conn, _ = net.Dial("udp", w.server)
+					}
+				}
+			} else {
+				time.Sleep(10 * time.Second) // wait for enabling periodic DNS lookups
+			}
+		}
+	}()
+}
+
 // writes the gzip compressed byte array to the connection as a series
 // of GELF chunked messages.  The header format is documented at
-// https://github.com/Graylog2/graylog2-docs/wiki/GELF as:
+// http://docs.graylog.org/en/latest/pages/gelf.html as:
 //
 //     2-byte magic (0x1e 0x0f), 8 byte id, 1 byte sequence id, 1 byte
 //     total, chunk-data
