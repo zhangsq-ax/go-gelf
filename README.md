@@ -7,6 +7,19 @@ can be run over any stream or datagram transport protocol, it has
 special support ([chunking]) to allow long messages to be split over
 multiple datagrams.
 
+Versions
+--------
+
+In order to enable versionning of this package with Go, this project
+is using GoPkg.in. The default branch of this project will be v1
+for some time to prevent breaking clients. We encourage all project
+to change their imports to the new GoPkg.in URIs as soon as possible.
+
+To see up to date code, make sure to switch to the master branch.
+
+v1.0.0
+------
+
 This implementation currently supports only UDP as a transport
 protocol. TCP and TLS are unsupported.
 
@@ -25,7 +38,16 @@ Installing
 
 go-gelf is go get-able:
 
+    go get gopkg.in/Graylog2/go-gelf.v1/gelf
+
+    or
+
 	go get github.com/Graylog2/go-gelf/gelf
+
+This will get you version 1.0.0, with only UDP support and legacy API.
+Newer versions are available through GoPkg.in:
+
+    go get gopkg.in/Graylog2/go-gelf.v2/gelf
 
 Usage
 -----
@@ -39,7 +61,7 @@ giving us both centralized and local logs.  (Redundancy is nice).
 
 	import (
 		"flag"
-		"github.com/Graylog2/go-gelf/gelf"
+		"gopkg.in/Graylog2/go-gelf.v1/gelf"
 		"io"
 		"log"
 		"os"
