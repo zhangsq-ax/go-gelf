@@ -42,7 +42,7 @@ go-gelf is go get-able:
 
     or
 
-	go get github.com/Graylog2/go-gelf/gelf
+    go get github.com/Graylog2/go-gelf/gelf
 
 This will get you version 1.0.0, with only UDP support and legacy API.
 Newer versions are available through GoPkg.in:
@@ -57,47 +57,48 @@ having your `main` function (or even `init`) call `log.SetOutput()`.
 By using an `io.MultiWriter`, we can log to both stdout and graylog -
 giving us both centralized and local logs.  (Redundancy is nice).
 
-	package main
+```golang
+package main
 
-	import (
-		"flag"
-		"gopkg.in/Graylog2/go-gelf.v1/gelf"
-		"io"
-		"log"
-		"os"
-	)
+import (
+  "flag"
+  "gopkg.in/Graylog2/go-gelf.v1/gelf"
+  "io"
+  "log"
+  "os"
+)
 
-	func main() {
-		var graylogAddr string
+func main() {
+  var graylogAddr string
 
-		flag.StringVar(&graylogAddr, "graylog", "", "graylog server addr")
-		flag.Parse()
+  flag.StringVar(&graylogAddr, "graylog", "", "graylog server addr")
+  flag.Parse()
 
-		if graylogAddr != "" {
-            // If using UDP
-			gelfWriter, err := gelf.NewUDPWriter(graylogAddr)
-            // If using TCP
-            //gelfWriter, err := gelf.NewTCPWriter(graylogAddr)
-			if err != nil {
-				log.Fatalf("gelf.NewWriter: %s", err)
-			}
-			// log to both stderr and graylog2
-			log.SetOutput(io.MultiWriter(os.Stderr, gelfWriter))
-			log.Printf("logging to stderr & graylog2@'%s'", graylogAddr)
-		}
+  if graylogAddr != "" {
+          // If using UDP
+    gelfWriter, err := gelf.NewUDPWriter(graylogAddr)
+          // If using TCP
+          //gelfWriter, err := gelf.NewTCPWriter(graylogAddr)
+    if err != nil {
+      log.Fatalf("gelf.NewWriter: %s", err)
+    }
+    // log to both stderr and graylog2
+    log.SetOutput(io.MultiWriter(os.Stderr, gelfWriter))
+    log.Printf("logging to stderr & graylog2@'%s'", graylogAddr)
+  }
 
-		// From here on out, any calls to log.Print* functions
-		// will appear on stdout, and be sent over UDP or TCP to the
-		// specified Graylog2 server.
+  // From here on out, any calls to log.Print* functions
+  // will appear on stdout, and be sent over UDP or TCP to the
+  // specified Graylog2 server.
 
-		log.Printf("Hello gray World")
+  log.Printf("Hello gray World")
 
-		// ...
-	}
-
+  // ...
+}
+```
 The above program can be invoked as:
 
-	go run test.go -graylog=localhost:12201
+    go run test.go -graylog=localhost:12201
 
 When using UDP messages may be dropped or re-ordered. However, Graylog
 server availability will not impact application performance; there is
