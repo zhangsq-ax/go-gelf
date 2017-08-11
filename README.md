@@ -62,7 +62,7 @@ package main
 
 import (
   "flag"
-  "gopkg.in/Graylog2/go-gelf.v1/gelf"
+  "gopkg.in/Graylog2/go-gelf.v2/gelf"
   "io"
   "log"
   "os"
