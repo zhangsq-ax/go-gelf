@@ -38,6 +38,15 @@ func NewReader(addr string) (*Reader, error) {
 	return r, nil
 }
 
+func (r *Reader) Close() error {
+	err := r.conn.Close()
+	if err != nil {
+		return err
+	}
+	r.conn = nil
+	return nil
+}
+
 func (r *Reader) Addr() string {
 	return r.conn.LocalAddr().String()
 }
@@ -62,6 +71,9 @@ func (r *Reader) Read(p []byte) (int, error) {
 }
 
 func (r *Reader) ReadMessage() (*Message, error) {
+	if r.conn == nil {
+		return nil, fmt.Errorf("connection already closed")
+	}
 	cBuf := make([]byte, ChunkSize)
 	var (
 		err        error
