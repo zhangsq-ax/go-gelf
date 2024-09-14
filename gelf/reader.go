@@ -48,6 +48,9 @@ func (r *Reader) Close() error {
 }
 
 func (r *Reader) Addr() string {
+	if r.conn == nil {
+		return ""
+	}
 	return r.conn.LocalAddr().String()
 }
 
